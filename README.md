@@ -82,9 +82,9 @@ pip install -r requirements.txt
 ```env
 POSTGRES_DB_URL=postgresql://user:password@localhost:5432/dbname
 LLM_MODEL_API_KEY=your-api-key
-LLM_MODEL_BASE_URL=http://localhost:1234/v1
+LLM_MODEL_BASE_URL=https://api.openai.com/v1
 RAG_AGENT_MODEL=gpt-4o-mini
-EMBEDDING_MODEL=text-embedding-nomic-embed-text-v1.5
+EMBEDDING_MODEL=text-embedding-3-small 
 ```
 
 4. Initialize the knowledge base:
@@ -252,11 +252,8 @@ ixora-chatbot/
 |----------|-------------|---------|
 | POSTGRES_DB_URL | PostgreSQL connection URL | postgresql://user:pass@localhost:5432/db |
 | LLM_MODEL_API_KEY | API key for LLM | sk-xxx or lm-studio |
-| LLM_MODEL_BASE_URL | LLM API endpoint | http://localhost:1234/v1 |
+| LLM_MODEL_BASE_URL | LLM API endpoint | https://api.openai.com/v1 or http://localhost:1234/v1|
 | RAG_AGENT_MODEL | Model identifier | gpt-4o-mini |
-| EMBEDDING_MODEL | Embedding model name | text-embedding-nomic-embed-text-v1.5 |
+| EMBEDDING_MODEL | Embedding model name | text-embedding-3-small or text-embedding-nomic-embed-text-v1.5 |
 
-## License
-
-Proprietary - IXORA
 
