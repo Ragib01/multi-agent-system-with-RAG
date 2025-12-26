@@ -1,0 +1,16 @@
+agno 
+fastapi
+uvicorn 
+openai
+sqlalchemy
+psycopg[binary]
+psycopg2-binary
+pgvector
+aiofiles==25.1.0
+pypdf
+tantivy
+pandas
+python-dotenv
+markdown 
+marker-pdf[full]
+psutil

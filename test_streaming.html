@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streaming Policy Assistant</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .chat-container {
+            padding: 30px;
+            min-height: 400px;
+        }
+        
+        .input-section {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        
+        #queryInput {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        #queryInput:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        #sendBtn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        #sendBtn:hover {
+            transform: translateY(-2px);
+        }
+        
+        #sendBtn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .response-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .reasoning-step {
+            background: #e3f2fd;
+            padding: 10px 15px;
+            border-left: 4px solid #2196f3;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #1565c0;
+        }
+        
+        .metadata-section {
+            margin-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 15px;
+        }
+        
+        .dropdown-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            transition: background 0.2s;
+            user-select: none;
+        }
+        
+        .dropdown-header:hover {
+            background: #ebebeb;
+        }
+        
+        .dropdown-header h4 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .dropdown-icon {
+            font-size: 18px;
+            color: #666;
+            transition: transform 0.3s;
+        }
+        
+        .dropdown-icon.open {
+            transform: rotate(180deg);
+        }
+        
+        .dropdown-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            padding: 0 15px;
+        }
+        
+        .dropdown-content.open {
+            max-height: 500px;
+            padding: 15px;
+            background: #fafafa;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        
+        .metadata-item {
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .metadata-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-right: 6px;
+            margin-bottom: 6px;
+        }
+        
+        .content-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+            line-height: 1.6;
+            font-size: 15px;
+        }
+        
+        /* Markdown styling */
+        .content-section h1 {
+            font-size: 24px;
+            margin: 20px 0 10px 0;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 8px;
+        }
+        
+        .content-section h2 {
+            font-size: 20px;
+            margin: 18px 0 8px 0;
+            color: #444;
+        }
+        
+        .content-section h3 {
+            font-size: 18px;
+            margin: 16px 0 8px 0;
+            color: #555;
+        }
+        
+        .content-section ul, .content-section ol {
+            margin: 10px 0;
+            padding-left: 30px;
+        }
+        
+        .content-section li {
+            margin: 5px 0;
+        }
+        
+        .content-section p {
+            margin: 10px 0;
+        }
+        
+        .content-section code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: #d63384;
+        }
+        
+        .content-section pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .content-section pre code {
+            background: none;
+            padding: 0;
+            color: #333;
+        }
+        
+        .content-section blockquote {
+            border-left: 4px solid #667eea;
+            padding-left: 15px;
+            margin: 10px 0;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .content-section table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 15px 0;
+        }
+        
+        .content-section table th,
+        .content-section table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        
+        .content-section table th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .content-section table tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        
+        .content-section strong {
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .content-section a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .content-section a:hover {
+            text-decoration: underline;
+        }
+        
+        .status {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+        
+        .thinking-indicator {
+            background: #fff3cd;
+            color: #856404;
+            padding: 10px 15px;
+            border-left: 4px solid #ffc107;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .source-item {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 8px 12px;
+            border-left: 4px solid #4caf50;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #c62828;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Policy Assistant</h1>
+            <p>Ask questions about company policies - streaming responses in real-time</p>
+        </div>
+        
+        <div class="chat-container">
+            <div class="input-section">
+                <input 
+                    type="text" 
+                    id="queryInput" 
+                    placeholder="Ask about company policies (e.g., What is the Sales Approval Policy?)"
+                    onkeypress="if(event.key === 'Enter') sendQuery()"
+                >
+                <button id="sendBtn" onclick="sendQuery()">Send</button>
+            </div>
+            
+            <div id="responseArea"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let sessionId = 'web_' + Math.random().toString(36).substr(2, 9);
+        let accumulatedContent = '';
+        let metadata = {
+            reasoning_steps: [],
+            tools_used: [],
+            sources: []
+        };
+
+        function toggleDropdown(id) {
+            const content = document.getElementById(id);
+            const icon = document.getElementById(id + '-icon');
+            
+            if (content.classList.contains('open')) {
+                content.classList.remove('open');
+                icon.classList.remove('open');
+            } else {
+                content.classList.add('open');
+                icon.classList.add('open');
+            }
+        }
+
+        function renderMetadata() {
+            const metadataHtml = `
+                <div class="metadata-section">
+                    <!-- Reasoning Steps -->
+                    <div class="dropdown-header" onclick="toggleDropdown('reasoning-content')">
+                        <h4>🧠 Reasoning Steps (${metadata.reasoning_steps.length})</h4>
+                        <span class="dropdown-icon" id="reasoning-content-icon">▼</span>
+                    </div>
+                    <div class="dropdown-content" id="reasoning-content">
+                        ${metadata.reasoning_steps.map((step, i) => 
+                            `<div class="metadata-item">${i + 1}. ${step}</div>`
+                        ).join('')}
+                    </div>
+                    
+                    <!-- Tools Used -->
+                    <div class="dropdown-header" onclick="toggleDropdown('tools-content')">
+                        <h4>🛠️ Tools Used (${metadata.tools_used.length})</h4>
+                        <span class="dropdown-icon" id="tools-content-icon">▼</span>
+                    </div>
+                    <div class="dropdown-content" id="tools-content">
+                        ${metadata.tools_used.map(tool => 
+                            `<span class="metadata-badge">${tool}</span>`
+                        ).join('')}
+                    </div>
+                    
+                    <!-- Sources -->
+                    <div class="dropdown-header" onclick="toggleDropdown('sources-content')">
+                        <h4>📚 Sources (${metadata.sources.length})</h4>
+                        <span class="dropdown-icon" id="sources-content-icon">▼</span>
+                    </div>
+                    <div class="dropdown-content" id="sources-content">
+                        ${metadata.sources.map(source => 
+                            `<div class="metadata-item">• ${source}</div>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+            
+            const metadataContainer = document.getElementById('metadataContainer');
+            if (metadataContainer) {
+                metadataContainer.innerHTML = metadataHtml;
+            }
+        }
+
+        async function sendQuery() {
+            const input = document.getElementById('queryInput');
+            const query = input.value.trim();
+            
+            if (!query) return;
+            
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+            accumulatedContent = '';
+            metadata = {
+                reasoning_steps: [],
+                tools_used: [],
+                sources: []
+            };
+            
+            const responseArea = document.getElementById('responseArea');
+            responseArea.innerHTML = `
+                <div class="response-container">
+                    <div class="status">Processing your query<span class="loading"></span></div>
+                    <div id="thinkingSection"></div>
+                    <div id="reasoningSection"></div>
+                    <div id="sourcesSection"></div>
+                    <div id="contentSection" class="content-section" style="display:none;"></div>
+                    <div id="metadataContainer"></div>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch(`${API_URL}/agentic/query/streaming`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        session_id: sessionId
+                    })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                const contentSection = document.getElementById('contentSection');
+                const thinkingSection = document.getElementById('thinkingSection');
+                const reasoningSection = document.getElementById('reasoningSection');
+                const sourcesSection = document.getElementById('sourcesSection');
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.slice(6));
+                            
+                            if (data.type === 'start') {
+                                document.querySelector('.status').textContent = data.message;
+                            }
+                            else if (data.type === 'thinking') {
+                                thinkingSection.innerHTML = `<div class="thinking-indicator">💭 ${data.message}</div>`;
+                            }
+                            else if (data.type === 'reasoning') {
+                                metadata.reasoning_steps.push(data.step);
+                                reasoningSection.innerHTML += `<div class="reasoning-step">🧠 ${data.step}</div>`;
+                            }
+                            else if (data.type === 'source') {
+                                metadata.sources.push(data.source);
+                                sourcesSection.innerHTML += `<div class="source-item">📚 ${data.source}</div>`;
+                            }
+                            else if (data.type === 'content') {
+                                contentSection.style.display = 'block';
+                                thinkingSection.innerHTML = ''; // Clear thinking indicator
+                                accumulatedContent += data.chunk;
+                                // Render markdown in real-time
+                                contentSection.innerHTML = marked.parse(accumulatedContent);
+                            }
+                            else if (data.type === 'metadata') {
+                                // Update metadata from server
+                                metadata.reasoning_steps = data.reasoning_steps || metadata.reasoning_steps;
+                                metadata.tools_used = data.tools_used || [];
+                                metadata.sources = data.sources || metadata.sources;
+                            }
+                            else if (data.type === 'done') {
+                                document.querySelector('.status').textContent = 'Response complete';
+                                document.querySelector('.loading')?.remove();
+                                thinkingSection.innerHTML = ''; // Clear thinking indicator
+                                // Final render with full content
+                                if (data.full_response) {
+                                    contentSection.innerHTML = marked.parse(data.full_response);
+                                }
+                                // Render metadata dropdowns
+                                renderMetadata();
+                            }
+                            else if (data.type === 'error') {
+                                responseArea.innerHTML = `<div class="error">Error: ${data.message}</div>`;
+                            }
+                        }
+                    }
+                }
+                
+                // Metadata is already set from the stream
+                
+            } catch (error) {
+                responseArea.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
+
