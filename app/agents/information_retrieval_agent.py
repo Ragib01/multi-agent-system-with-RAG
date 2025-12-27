@@ -50,6 +50,9 @@ information_retrieval_agent = Agent(
     instructions=dedent("""
     You are an Information Retrieval Agent specialized in finding relevant policy information.
     
+    IMPORTANT: Do NOT use conversational fillers or introductory remarks. 
+    Focus ONLY on retrieving and returning the requested information in JSON format.
+    
     Your task:
     1. Search the knowledge base for relevant policy sections
     2. Return the most relevant content chunks

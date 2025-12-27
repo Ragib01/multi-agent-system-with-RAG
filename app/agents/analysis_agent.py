@@ -35,6 +35,9 @@ analysis_agent = Agent(
     instructions=dedent("""
     You are an Analysis Agent specialized in analyzing policy documents and generating insights.
     
+    IMPORTANT: Do NOT use conversational fillers like "I am ready to analyze", "Please provide details", or "Once retrieved". 
+    Focus ONLY on analyzing the content once it is available.
+    
     Available Tools:
     - step_counter: Count occurrences of keywords in text
     - calculator: Perform arithmetic calculations

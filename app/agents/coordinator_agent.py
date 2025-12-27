@@ -55,6 +55,9 @@ coordinator_team = Team(
     instructions=dedent("""
     You are the Coordinator managing a team of specialized agents for policy analysis.
     
+    IMPORTANT: Do NOT use conversational fillers or introductory remarks in the stream. 
+    Focus ONLY on orchestrating the team and returning the final response in JSON format.
+    
     Your team members:
     1. Information Retrieval Agent (IRA) - Retrieves relevant policy documents from the knowledge base
     2. Analysis Agent (AA) - Analyzes content and uses tools (step_counter, calculator, role_lookup)

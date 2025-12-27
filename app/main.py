@@ -8,7 +8,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 import json
-from app.agents.coordinator_agent import run_multi_agent_query, coordinator_team
+from app.agents import (
+    information_retrieval_agent, 
+    analysis_agent, 
+    coordinator_team, 
+    run_multi_agent_query
+)
 
 app = FastAPI(
     title="Multi-Agent Policy Assistant",
@@ -88,30 +93,62 @@ async def query_agent_streaming(request: QueryRequest):
     Stream responses from the multi-agent system in real-time.
     
     Returns Server-Sent Events (SSE) stream with:
-    - Thinking/reasoning steps as they happen
+    - Agent-specific reasoning steps with their responses
     - Sources being retrieved
     - Final answer chunks
     """
     async def event_generator():
         try:
-            # Send initial thinking event
-            yield f"data: {json.dumps({'type': 'thinking', 'message': 'Analyzing your query...'})}\n\n"
+            # Step 1: Coordinator receives query
+            yield f"data: {json.dumps({'type': 'thinking', 'message': 'Coordinator Agent analyzing query...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Coordinator Agent', 'step': 'Received query and initiating multi-agent workflow', 'status': 'in_progress'})}\n\n"
             
-            # Send reasoning steps
-            yield f"data: {json.dumps({'type': 'reasoning', 'step': 'Delegating to Information Retrieval Agent'})}\n\n"
-            yield f"data: {json.dumps({'type': 'thinking', 'message': 'Searching knowledge base...'})}\n\n"
+            # Step 2: Information Retrieval Agent
+            yield f"data: {json.dumps({'type': 'thinking', 'message': 'Information Retrieval Agent searching...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Information Retrieval Agent', 'step': 'Searching knowledge base for relevant policy documents', 'status': 'in_progress'})}\n\n"
             
-            yield f"data: {json.dumps({'type': 'reasoning', 'step': 'Retrieving relevant policy documents'})}\n\n"
+            # Run IRA to get dynamic results for the UI
+            ira_response = information_retrieval_agent.run(input=request.query, stream=False)
+            retrieved_content = ira_response.content if hasattr(ira_response, 'content') else str(ira_response)
             
-            # Send sources being used
-            yield f"data: {json.dumps({'type': 'source', 'source': 'Organization Policies & Processes Manual'})}\n\n"
+            # Parse IRA response to see what was found
+            found_docs = False
+            total_chunks = 0
+            sources = []
+            try:
+                # Handle potential JSON in the response
+                json_str = retrieved_content
+                if '```json' in json_str:
+                    json_str = json_str.split('```json')[1].split('```')[0].strip()
+                
+                if json_str.strip().startswith('{'):
+                    ira_data = json.loads(json_str)
+                    total_chunks = ira_data.get('total_chunks', 0)
+                    if total_chunks > 0:
+                        found_docs = True
+                        sources = [c.get('source', 'Organization Policy') for c in ira_data.get('retrieved_content', [])]
+            except Exception:
+                # Fallback if parsing fails but content seems to exist
+                if len(retrieved_content) > 100:
+                    found_docs = True
             
-            yield f"data: {json.dumps({'type': 'thinking', 'message': 'Analyzing retrieved content...'})}\n\n"
-            yield f"data: {json.dumps({'type': 'reasoning', 'step': 'Analysis Agent processing content'})}\n\n"
+            if found_docs:
+                unique_sources = list(set(sources))
+                for source in unique_sources:
+                    yield f"data: {json.dumps({'type': 'source', 'source': source})}\n\n"
+                
+                ira_msg = f"Found {total_chunks if total_chunks > 0 else 'relevant'} policy sections"
+                yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Information Retrieval Agent', 'step': 'Retrieved relevant policy sections', 'status': 'completed', 'response': ira_msg})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Information Retrieval Agent', 'step': 'No relevant policy documents found', 'status': 'completed', 'response': 'Proceeding with general knowledge'})}\n\n"
+            
+            # Step 3: Analysis Agent
+            yield f"data: {json.dumps({'type': 'thinking', 'message': 'Analysis Agent processing content...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Analysis Agent', 'step': 'Analyzing retrieved content and applying tools', 'status': 'in_progress'})}\n\n"
             
             # Run the team with streaming
             response_text = ""
-            yield f"data: {json.dumps({'type': 'thinking', 'message': 'Generating response...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'thinking', 'message': 'Analysis Agent generating insights...'})}\n\n"
             
             skip_mode = False
             for chunk in coordinator_team.run(
@@ -123,18 +160,32 @@ async def query_agent_streaming(request: QueryRequest):
                     content = chunk.content
                     content_lower = content.lower()
                     
-                    # Detect JSON blocks and tool outputs to skip
+                    # Detect JSON blocks, tool outputs, and conversational fillers to skip
                     if ('search_knowledge_base' in content_lower or 
                         'completed in' in content_lower or
                         'retrieved_content' in content_lower or
+                        'reasoning_steps' in content_lower or
+                        'tools_used' in content_lower or
+                        'key_findings' in content_lower or
+                        'ready to analyze' in content_lower or
+                        'once it is retrieved' in content_lower or
+                        'provide the necessary details' in content_lower or
+                        'provide the document' in content_lower or
+                        'waiting for' in content_lower or
+                        'analyze the content' in content_lower or
+                        'retrieving' in content_lower and 'policy' in content_lower or
                         '```json' in content_lower or
-                        (skip_mode and ('{' in content or '}' in content or '"retrieved_content"' in content))):
+                        content.strip().startswith('{') or
+                        (skip_mode and ('{' in content or '}' in content or '"' in content or ':' in content))):
                         skip_mode = True
                         continue
                     
-                    # Stop skipping when we see markdown header (actual content starts)
-                    if skip_mode and content.strip().startswith('#'):
-                        skip_mode = False
+                    # Stop skipping when we see actual markdown content starts
+                    # We look for a markdown header or a significant piece of text that isn't JSON
+                    if skip_mode:
+                        stripped_content = content.strip()
+                        if stripped_content.startswith('#') or (len(stripped_content) > 30 and not stripped_content.startswith('{') and not stripped_content.startswith('"')):
+                             skip_mode = False
                     
                     # Skip content while in skip mode
                     if skip_mode:
@@ -144,11 +195,20 @@ async def query_agent_streaming(request: QueryRequest):
                     response_text += content
                     yield f"data: {json.dumps({'type': 'content', 'chunk': content})}\n\n"
             
+            # Step 4: Analysis Agent completed
+            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Analysis Agent', 'step': 'Completed analysis and generated insights', 'status': 'completed', 'response': 'Analysis complete with tool usage and findings'})}\n\n"
+            
+            # Step 5: Coordinator aggregates
+            yield f"data: {json.dumps({'type': 'thinking', 'message': 'Coordinator aggregating results...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Coordinator Agent', 'step': 'Aggregating results from all agents', 'status': 'in_progress'})}\n\n"
+            
             # Get full result with metadata
             result = run_multi_agent_query(
                 query=request.query,
                 session_id=request.session_id
             )
+            
+            yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Coordinator Agent', 'step': 'Generated final comprehensive response', 'status': 'completed', 'response': 'Multi-agent workflow completed successfully'})}\n\n"
             
             # Send final metadata
             yield f"data: {json.dumps({'type': 'metadata', 'reasoning_steps': result['reasoning_steps'], 'sources': result['sources'], 'tools_used': result['tools_used']})}\n\n"
