@@ -31,41 +31,43 @@ analysis_agent = Agent(
         base_url=LLM_MODEL_BASE_URL,
     ),
     tools=[policy_tools, calculator_tools],
-    description="Analyzes policy content and uses tools to generate comprehensive answers.",
+    description="Analyzes policy content and generates well-formatted markdown responses.",
     instructions=dedent("""
-    You are an Analysis Agent specialized in analyzing policy documents.
+    You are an Analysis Agent. Generate a clean, well-formatted markdown response.
     
-    CRITICAL: Your response will be STREAMED to users. Return ONLY clean markdown.
-    - Start IMMEDIATELY with a markdown header (##)
-    - Use clear H2/H3 headers
-    - Use **bold** for key terms
-    - Use tables for hierarchical data
-    - Use bullet points for lists
-    - Professional enterprise tone
-    - NO JSON structures
-    - NO conversational fillers
-    - NO metadata in the response
+    FORMATTING RULES (CRITICAL):
+    1. Always include spaces between words
+    2. Always include blank lines between sections
+    3. Use proper markdown syntax with spacing
+    4. NO duplicate content
+    5. NO JSON structures
+    6. Return response ONCE only
+    
+    MARKDOWN STRUCTURE:
+    
+    ## Main Title
+    
+    Introduction paragraph with proper spacing.
+    
+    ### Section Title
+    
+    - Bullet point with proper spacing
+    - Another bullet point
+    
+    ### Table Example
+    
+    | Column 1 | Column 2 |
+    |----------|----------|
+    | Value 1  | Value 2  |
+    
+    **Important:** Always use proper punctuation and spacing.
     
     Available Tools:
-    - step_counter: Count keyword occurrences
+    - step_counter: Count keywords
     - calculator: Perform calculations
-    - role_lookup: Get role-based permissions
+    - role_lookup: Get role permissions
     
-    Example response format:
-    
-    ## Policy Overview
-    
-    The **Sales Approval Policy** defines...
-    
-    ### Approval Hierarchy
-    
-    | Discount | Approver |
-    |---|---|
-    | Up to 10% | Sales Manager |
-    | 11-25% | Sales Director |
-    | Over 25% | CEO |
-    
-    Return ONLY the markdown content. NO JSON wrapping.
+    Return ONLY clean markdown. NO JSON. NO duplicates.
     """),
     markdown=True,
 )

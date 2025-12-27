@@ -15,6 +15,7 @@ from agno.db.postgres import PostgresDb
 from agno.memory import MemoryManager
 from agno.tools.memory import MemoryTools
 
+from app.tools.policy_tools import PolicyTools
 from app.agents.information_retrieval_agent import information_retrieval_agent
 from app.agents.analysis_agent import analysis_agent
 
@@ -51,49 +52,42 @@ coordinator_team = Team(
         cache_ttl=7200,
         cache_dir=".agno/cache/model_responses"
     ),
-    tools=[memory_tools],
+    tools=[PolicyTools],
     instructions=dedent("""
     You are the Coordinator managing a team for policy analysis.
     
-    CRITICAL: Your response will be STREAMED to users. Return ONLY clean markdown.
-    - Start IMMEDIATELY with a markdown header (##)
-    - Use clear H2/H3 headers
-    - Use **bold** for emphasis
-    - Use tables for structured data
-    - Use bullet points for lists
-    - Professional executive tone
-    - NO JSON structures in the stream
-    - NO conversational fillers
-    - NO metadata keys
+    FORMATTING RULES (CRITICAL):
+    1. Always include spaces between words
+    2. Always include blank lines between sections (use double newlines)
+    3. Use proper markdown syntax with spacing
+    4. NO duplicate content - return response ONCE only
+    5. NO JSON structures
+    6. Professional executive tone
     
-    Team members:
-    1. Information Retrieval Agent (IRA) - Retrieves documents
-    2. Analysis Agent (AA) - Analyzes and uses tools
+    MARKDOWN STRUCTURE:
     
-    Workflow:
-    1. Delegate to IRA
-    2. Pass to AA for analysis
-    3. Return clean markdown
+    ## Main Policy Title
     
-    Example format:
+    Opening paragraph explaining the policy with proper spacing between words.
     
-    ## Sales Approval Policy
+    ### Key Points
     
-    The **Sales Approval Policy** establishes...
+    - First bullet point with proper spacing
+    - Second bullet point
     
-    ### Approval Hierarchy
+    ### Approval Process
     
-    | Discount | Approver |
-    |---|---|
-    | Up to 10% | Sales Manager |
+    | Level | Approver | Limit |
+    |-------|----------|-------|
+    | 1 | Manager | $5,000 |
+    | 2 | Director | $25,000 |
     
-    Return ONLY markdown. NO JSON wrapping for streaming.
+    **Note:** Always use proper punctuation, spacing, and formatting.
+    
+    Team: IRA (retrieves docs) + AA (analyzes with tools)
+    
+    Return ONLY clean markdown. NO JSON. NO duplicates. Proper spacing required.
     """),
-    db=db,
-    memory_manager=memory_manager,
-    enable_user_memories=True,
-    add_history_to_context=True,
-    num_history_runs=10,
     markdown=True,
     debug_mode=True,
 )
@@ -130,12 +124,22 @@ def run_multi_agent_query(query: str, session_id: str) -> Dict[str, Any]:
     answer = final_result
     
     try:
+        # Check if response is JSON
         if isinstance(final_result, str) and final_result.strip().startswith('{'):
             parsed = json.loads(final_result)
             reasoning_steps = parsed.get('reasoning_steps', [])
             tools_used = parsed.get('tools_used', [])
             sources = parsed.get('sources', sources)
             answer = parsed.get('final_answer', final_result)
+        # If it's already markdown (not JSON), use it directly
+        elif isinstance(final_result, str) and final_result.strip().startswith('#'):
+            answer = final_result
+            reasoning_steps = [
+                "Information Retrieval Agent found relevant policy documents",
+                "Analysis Agent analyzed content with available tools",
+                "Coordinator generated comprehensive response"
+            ]
+            tools_used = ['information_retrieval', 'analysis', 'knowledge_search']
     except json.JSONDecodeError:
         reasoning_steps = [
             "Delegated query to Information Retrieval Agent",

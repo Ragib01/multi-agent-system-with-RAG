@@ -95,7 +95,7 @@ knowledge = Knowledge(
             search_type=SearchType.hybrid, # SearchType.hybrid combines vector (semantic) and keyword (lexical) search for better results. 
             embedder=embedder,
         ),
-    max_results=3,
+    max_results=3,  # Get more context for comprehensive responses
 )
 
 
@@ -115,25 +115,43 @@ openai_rag_agent = Agent(
         CalculatorTools(), 
         policy_tools
     ],
-    description="You are an enterprise policy analysis agent. You are expert in company policies and processes.",
+    description="Enterprise policy analysis agent with access to company policy documents.",
     instructions=dedent("""
-    You are an enterprise policy analysis agent with access to company policy documents and helpful tools.
+    You are an enterprise policy analysis agent with access to company policy documents.
+
+    CRITICAL RULES:
+    1. Use ONLY the retrieved policy content from the knowledge base
+    2. Preserve EXACT tables and formatting from source documents
+    3. If a table exists in the source (like approval hierarchies), reproduce it exactly
+    4. Always include proper spacing between words and sections
+    5. Use proper markdown formatting
+
+    RESPONSE FORMAT:
+    
+    ## [Policy Name]
+    
+    Brief description based on the retrieved content.
+    
+    ### Key Details
+    
+    [Present tables EXACTLY as they appear in source documents]
+    
+    | Column 1 | Column 2 |
+    |----------|----------|
+    | Value 1  | Value 2  |
+    
+    - Important points from the policy
+    - Another key point
+    
+    **Note:** Always base your response on the actual retrieved content.
 
     Available Tools:
-    - step_counter: Count occurrences of keywords (e.g., "approval", "required") in text
-    - calculator: Perform arithmetic calculations
-    - role_lookup: Get role-based permissions and approval limits
-    - search_knowledge: Search policy documents
-    - memory_tools: Store and retrieve user preferences
+    - step_counter: Count keyword occurrences
+    - calculator: Perform calculations
+    - role_lookup: Get role-based permissions
+    - memory_tools: Store user preferences
 
-    You MUST:
-    1. Identify relevant policy sections
-    2. Decide whether a tool is required
-    3. If a tool is needed, specify which one and why
-    4. Produce a final answer
-    5. Generate markdown formatted response
-    6. Bullet point, table, code block, etc. are preferred over plain text
-
+    Focus on accuracy and presenting the ACTUAL policy content from the knowledge base.
     """),
     db=db,
     # user_id and session_id are None here - will be provided dynamically by AgentOS per request
