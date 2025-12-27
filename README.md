@@ -137,8 +137,150 @@ Process employee queries about company policies.
   ]
 }
 ```
+## Streaming API
 
-Example queries:
+### POST `/agentic/query/streaming`
+
+Stream responses from the RAG agent in real-time using Server-Sent Events (SSE). This endpoint provides a Claude-like streaming experience with live updates of agent reasoning steps, sources, and markdown-formatted content.
+
+#### Request
+
+```json
+{
+  "query": "Tell me about Sales & Marketing Policies",
+  "session_id": "employee_001"
+}
+```
+
+#### Response Format
+
+The API streams events in Server-Sent Events (SSE) format with the following event types:
+
+**1. Thinking Events**
+```json
+{"type": "thinking", "message": "RAG Agent analyzing query..."}
+```
+
+**2. Agent Step Events**
+```json
+{
+  "type": "agent_step",
+  "agent": "RAG Agent",
+  "step": "Searching knowledge base for relevant policy documents",
+  "status": "in_progress" | "completed",
+  "response": "Found 3 policy sections"
+}
+```
+
+**3. Source Events**
+```json
+{"type": "source", "source": "Organization Policies & Processes Manual"}
+```
+
+**4. Content Events** (Streamed in chunks)
+```json
+{"type": "content", "chunk": "## Sales Approval Policy\n\n..."}
+```
+
+**5. Metadata Event** (Final metadata)
+```json
+{
+  "type": "metadata",
+  "reasoning_steps": ["step 1", "step 2", ...],
+  "sources": ["source1", "source2"],
+  "tools_used": ["knowledge_search", "reasoning"]
+}
+```
+
+**6. Done Event**
+```json
+{"type": "done", "full_response": "Complete markdown response..."}
+```
+
+**7. Error Event**
+```json
+{"type": "error", "message": "Error description"}
+```
+
+#### Usage Example
+
+**Python:**
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/agentic/query/streaming",
+    json={
+        "query": "Tell me about Sales Approval Policy",
+        "session_id": "employee_001"
+    },
+    stream=True
+)
+
+for line in response.iter_lines():
+    if line:
+        line_str = line.decode('utf-8')
+        if line_str.startswith('data: '):
+            data = json.loads(line_str[6:])
+            if data['type'] == 'content':
+                print(data['chunk'], end='', flush=True)
+```
+
+**JavaScript/TypeScript:**
+```javascript
+const eventSource = new EventSource('http://localhost:8000/agentic/query/streaming', {
+  method: 'POST',
+  body: JSON.stringify({
+    query: "Tell me about Sales Approval Policy",
+    session_id: "employee_001"
+  })
+});
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.type === 'content') {
+    // Append chunk to UI
+    document.getElementById('response').innerHTML += data.chunk;
+  } else if (data.type === 'thinking') {
+    // Show thinking indicator
+    console.log('Thinking:', data.message);
+  }
+};
+```
+
+**cURL:**
+```bash
+curl -X POST "http://localhost:8000/agentic/query/streaming" \
+  -H "Content-Type: application/json" \
+  -N \
+  -d '{
+    "query": "Tell me about Sales Approval Policy",
+    "session_id": "employee_001"
+  }'
+```
+
+#### Features
+
+- **Real-time Updates**: See agent reasoning steps and sources as they're discovered
+- **Live Markdown Streaming**: Content streams in chunks as it's generated
+- **Agent Transparency**: Track the RAG Agent's workflow steps in real-time
+- **Source Attribution**: See which policy documents are being used
+- **Error Handling**: Graceful error events for debugging
+- **Session Support**: Maintains conversation context via `session_id`
+
+#### Architecture
+
+The streaming endpoint:
+1. Performs a **single vector search** using the RAG agent's knowledge base
+2. Streams agent steps and source discovery
+3. Streams markdown-formatted content chunks in real-time
+4. Provides final metadata (reasoning steps, sources, tools used) at completion
+
+This ensures efficient, single-pass knowledge retrieval while providing a rich streaming experience.
+
+---
+
+## Example Queries
 - "Summarize the steps for requesting hardware approval."
 - "How many steps in the onboarding process require HR approval?"
 - "What are the approval limits for a manager role?"
@@ -214,6 +356,7 @@ All responses follow a consistent schema:
    - Implement response caching
    - Add async processing for long queries
    - Optimize vector search parameters
+   - Improve the markdown response
 
 5. **Monitoring**:
    - Add query analytics
