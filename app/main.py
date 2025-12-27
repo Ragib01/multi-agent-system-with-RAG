@@ -107,40 +107,33 @@ async def query_agent_streaming(request: QueryRequest):
             yield f"data: {json.dumps({'type': 'thinking', 'message': 'Information Retrieval Agent searching...'})}\n\n"
             yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Information Retrieval Agent', 'step': 'Searching knowledge base for relevant policy documents', 'status': 'in_progress'})}\n\n"
             
-            # Run IRA to get dynamic results for the UI
-            ira_response = information_retrieval_agent.run(input=request.query, stream=False)
-            retrieved_content = ira_response.content if hasattr(ira_response, 'content') else str(ira_response)
+            # Run IRA search directly to get the actual document count and metadata
+            search_results = information_retrieval_agent.knowledge.search(request.query)
+            total_chunks = len(search_results)
+            found_docs = total_chunks > 0
             
-            # Parse IRA response to see what was found
-            found_docs = False
-            total_chunks = 0
             sources = []
-            try:
-                # Handle potential JSON in the response
-                json_str = retrieved_content
-                if '```json' in json_str:
-                    json_str = json_str.split('```json')[1].split('```')[0].strip()
-                
-                if json_str.strip().startswith('{'):
-                    ira_data = json.loads(json_str)
-                    total_chunks = ira_data.get('total_chunks', 0)
-                    if total_chunks > 0:
-                        found_docs = True
-                        sources = [c.get('source', 'Organization Policy') for c in ira_data.get('retrieved_content', [])]
-            except Exception:
-                # Fallback if parsing fails but content seems to exist
-                if len(retrieved_content) > 100:
-                    found_docs = True
-            
             if found_docs:
+                for doc in search_results:
+                    # Extract source from metadata if it exists
+                    # Depending on the Agno version, doc might be a Document object with metadata attribute
+                    meta = getattr(doc, 'metadata', {}) or {}
+                    # Try different common keys if 'source' isn't there
+                    source_name = meta.get('source') or meta.get('name') or meta.get('filename') or 'Organization Policy'
+                    sources.append(source_name)
+                
                 unique_sources = list(set(sources))
                 for source in unique_sources:
                     yield f"data: {json.dumps({'type': 'source', 'source': source})}\n\n"
                 
-                ira_msg = f"Found {total_chunks if total_chunks > 0 else 'relevant'} policy sections"
+                ira_msg = f"Found {total_chunks} policy sections"
                 yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Information Retrieval Agent', 'step': 'Retrieved relevant policy sections', 'status': 'completed', 'response': ira_msg})}\n\n"
             else:
                 yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Information Retrieval Agent', 'step': 'No relevant policy documents found', 'status': 'completed', 'response': 'Proceeding with general knowledge'})}\n\n"
+            
+            # Now run the IRA Agent to process the content for the Analysis Agent
+            ira_response = information_retrieval_agent.run(input=request.query, stream=False)
+            retrieved_content = ira_response.content if hasattr(ira_response, 'content') else str(ira_response)
             
             # Step 3: Analysis Agent
             yield f"data: {json.dumps({'type': 'thinking', 'message': 'Analysis Agent processing content...'})}\n\n"
@@ -150,7 +143,10 @@ async def query_agent_streaming(request: QueryRequest):
             response_text = ""
             yield f"data: {json.dumps({'type': 'thinking', 'message': 'Analysis Agent generating insights...'})}\n\n"
             
-            skip_mode = False
+            skip_mode = True  # Start in skip mode to filter out initial JSON
+            json_depth = 0
+            found_markdown = False
+            
             for chunk in coordinator_team.run(
                 input=request.query,
                 session_id=request.session_id,
@@ -160,40 +156,50 @@ async def query_agent_streaming(request: QueryRequest):
                     content = chunk.content
                     content_lower = content.lower()
                     
-                    # Detect JSON blocks, tool outputs, and conversational fillers to skip
-                    if ('search_knowledge_base' in content_lower or 
-                        'completed in' in content_lower or
-                        'retrieved_content' in content_lower or
-                        'reasoning_steps' in content_lower or
-                        'tools_used' in content_lower or
-                        'key_findings' in content_lower or
-                        'ready to analyze' in content_lower or
-                        'once it is retrieved' in content_lower or
-                        'provide the necessary details' in content_lower or
-                        'provide the document' in content_lower or
-                        'waiting for' in content_lower or
-                        'analyze the content' in content_lower or
-                        'retrieving' in content_lower and 'policy' in content_lower or
-                        '```json' in content_lower or
-                        content.strip().startswith('{') or
-                        (skip_mode and ('{' in content or '}' in content or '"' in content or ':' in content))):
+                    # Track JSON depth
+                    json_depth += content.count('{')
+                    json_depth -= content.count('}')
+                    
+                    # Detect JSON metadata keys that should be filtered
+                    json_keywords = [
+                        'search_knowledge_base', 'completed in', 'retrieved_content',
+                        '"reasoning_steps"', '"tools_used"', '"key_findings"', 
+                        '"analysis":', '"final_answer":', '```json',
+                        'ready to analyze', 'once it is retrieved', 
+                        'provide the necessary details', 'provide the document',
+                        'waiting for', 'analyze the content'
+                    ]
+                    
+                    # Check if content contains any JSON keywords
+                    has_json_keywords = any(keyword in content_lower for keyword in json_keywords)
+                    
+                    # If we're in a JSON structure or see JSON keywords, skip
+                    if has_json_keywords or json_depth > 0:
                         skip_mode = True
                         continue
                     
-                    # Stop skipping when we see actual markdown content starts
-                    # We look for a markdown header or a significant piece of text that isn't JSON
-                    if skip_mode:
-                        stripped_content = content.strip()
-                        if stripped_content.startswith('#') or (len(stripped_content) > 30 and not stripped_content.startswith('{') and not stripped_content.startswith('"')):
-                             skip_mode = False
-                    
-                    # Skip content while in skip mode
-                    if skip_mode:
+                    # Check if content looks like JSON structure
+                    stripped = content.strip()
+                    if stripped.startswith('{') or stripped.startswith('}') or stripped.startswith('[') or stripped.startswith(']'):
+                        skip_mode = True
                         continue
                     
-                    # Yield actual content
-                    response_text += content
-                    yield f"data: {json.dumps({'type': 'content', 'chunk': content})}\n\n"
+                    # Check if content has JSON patterns like "key": or \n escape sequences
+                    if '":' in content or '\\n' in content or stripped.startswith('"'):
+                        skip_mode = True
+                        continue
+                    
+                    # Detect markdown headers (actual content starts)
+                    if stripped.startswith('#'):
+                        skip_mode = False
+                        found_markdown = True
+                    
+                    # If we've found markdown and content looks clean, allow it
+                    if found_markdown and not skip_mode:
+                        # Only yield if it's actual content (not empty/whitespace)
+                        if len(stripped) > 2:
+                            response_text += content
+                            yield f"data: {json.dumps({'type': 'content', 'chunk': content})}\n\n"
             
             # Step 4: Analysis Agent completed
             yield f"data: {json.dumps({'type': 'agent_step', 'agent': 'Analysis Agent', 'step': 'Completed analysis and generated insights', 'status': 'completed', 'response': 'Analysis complete with tool usage and findings'})}\n\n"

@@ -53,35 +53,41 @@ coordinator_team = Team(
     ),
     tools=[memory_tools],
     instructions=dedent("""
-    You are the Coordinator managing a team of specialized agents for policy analysis.
+    You are the Coordinator managing a team for policy analysis.
     
-    IMPORTANT: Do NOT use conversational fillers or introductory remarks in the stream. 
-    Focus ONLY on orchestrating the team and returning the final response in JSON format.
+    CRITICAL: Your response will be STREAMED to users. Return ONLY clean markdown.
+    - Start IMMEDIATELY with a markdown header (##)
+    - Use clear H2/H3 headers
+    - Use **bold** for emphasis
+    - Use tables for structured data
+    - Use bullet points for lists
+    - Professional executive tone
+    - NO JSON structures in the stream
+    - NO conversational fillers
+    - NO metadata keys
     
-    Your team members:
-    1. Information Retrieval Agent (IRA) - Retrieves relevant policy documents from the knowledge base
-    2. Analysis Agent (AA) - Analyzes content and uses tools (step_counter, calculator, role_lookup)
+    Team members:
+    1. Information Retrieval Agent (IRA) - Retrieves documents
+    2. Analysis Agent (AA) - Analyzes and uses tools
     
     Workflow:
-    1. Receive the user query about company policies
-    2. Delegate to Information Retrieval Agent to get relevant policy content
-    3. Pass retrieved content to Analysis Agent for detailed analysis
-    4. Aggregate results from both agents
-    5. Generate final structured response
+    1. Delegate to IRA
+    2. Pass to AA for analysis
+    3. Return clean markdown
     
-    Return your final response in JSON format:
-    {
-        "reasoning_steps": ["step 1", "step 2", ...],
-        "tools_used": ["tool1", "tool2", ...],
-        "sources": ["source1", "source2", ...],
-        "final_answer": "comprehensive markdown-formatted answer"
-    }
+    Example format:
     
-    Always ensure the final answer is well-formatted with:
-    - Clear headings
-    - Bullet points for lists
-    - Tables where appropriate
-    - Code blocks for examples
+    ## Sales Approval Policy
+    
+    The **Sales Approval Policy** establishes...
+    
+    ### Approval Hierarchy
+    
+    | Discount | Approver |
+    |---|---|
+    | Up to 10% | Sales Manager |
+    
+    Return ONLY markdown. NO JSON wrapping for streaming.
     """),
     db=db,
     memory_manager=memory_manager,

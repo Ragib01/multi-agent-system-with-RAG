@@ -95,14 +95,14 @@ knowledge = Knowledge(
             search_type=SearchType.hybrid, # SearchType.hybrid combines vector (semantic) and keyword (lexical) search for better results. 
             embedder=embedder,
         ),
-    max_results=1,
+    max_results=3,
 )
 
 
 openai_rag_agent = Agent(
     name="OpenAI RAG Agent",
     model=OpenAIChat(
-        id="gpt-5",
+        id="gpt-4o-mini",
         api_key=LLM_MODEL_API_KEY,
         base_url=LLM_MODEL_BASE_URL,
         cache_response=True,  # Enable response caching
@@ -134,16 +134,6 @@ openai_rag_agent = Agent(
     5. Generate markdown formatted response
     6. Bullet point, table, code block, etc. are preferred over plain text
 
-    Respond ONLY in valid JSON with this schema:
-
-    {
-    "reasoning_steps": [string],
-    "tool_decision": {
-        "tool_name": string | null,
-        "reason": string | null
-    },
-    "final_answer": string
-    }
     """),
     db=db,
     # user_id and session_id are None here - will be provided dynamically by AgentOS per request
@@ -157,8 +147,8 @@ openai_rag_agent = Agent(
     search_knowledge=True,
     markdown=True,
     debug_mode=True,
-    session_summary_manager=session_summary_manager,
-    enable_session_summaries=True,
+    # session_summary_manager=session_summary_manager,
+    # enable_session_summaries=True,
     # reasoning=True,
     # reasoning_model=OpenAIChat(
     #     id="gpt-5",
